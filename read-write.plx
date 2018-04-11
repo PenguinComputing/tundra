@@ -240,24 +240,6 @@ sub setreg {
    return 1 ;
 };
 
-if( 0 ) {
-   printf "LINK: %02d\n", getreg("link");
-
-   # Try setting the speed to 00  (auto?)
-   if( 0 ) {
-      $msg = "~2001E1EC200E"."00"."0E6E".unpack("H*",pack("V",0))  ;
-      syswrite( SCC, $msg.msgchk($msg)."\r" );
-      sysreadt( SCC, $reply, -1, 10 ); print $reply, "\n" ;
-   } elsif( 1 ) {
-      print "Set link to 00 -- " ;
-      if( setreg( "link", 0 ) ) {
-         print "SUCCESS.\n" ;
-      } else {
-         print "FAILED.\n" ;
-      };
-   };
-};
-
 ### getall(): Read and display "all" parameters in a pretty format
 sub getall () {
    # Dump static configuration
@@ -298,13 +280,6 @@ for my $arg ( @ARGV ) {
    } else {
       printf "%-4s: %s\n", $labels{$arg}, getreg( $arg );
    };
-};
-
-if( 0 ) {
-# Try setting the speed to 00  (auto?)
-$msg = "~2001E1EC200E"."00"."0E6E".unpack("H*",pack("V",0))  ;
-syswrite( SCC, $msg.msgchk($msg)."\r" );
-sysreadt( SCC, $reply, -1, 10 ); print $reply, "\n" ;
 };
 
 print "\n" ;
