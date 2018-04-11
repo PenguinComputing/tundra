@@ -124,6 +124,7 @@ our %regmap = (
       sm   => "meta:sm1:sm2:sm3:sm4",
       sm1  => "000C5E", sm2  => "000C5F", sm3  => "000C60", sm4  => "000C61",
       tp   => "meta:tp1:tp2:tp3:tp4",
+      trap => "meta:tp1:tp2:tp3:tp4",
       tp1  => "000C6A", tp2  => "000C6B", tp3  => "000C6C", tp4  => "000C6D",
 
       outmV => "010110", outVnv => "0100A4",
@@ -131,6 +132,22 @@ our %regmap = (
       numRedRect => "000E6C",
       numBBU => "000E6D",
    );
+
+our %labels = (
+      dhcp => "DHCP",
+      link => "LINK",
+      ip   => "IP",
+      gw   => "GW",
+      sm   => "SM",
+      tp   => "TRAP",
+      trap => "TRAP",
+      outmV => "Vout",
+      outVnv => "Vout(NV)",
+      numRect => "Rect",
+      numRedRect => "N+R",
+      numBBU => "BBU",
+   );
+
 
 sub getreg {
    my $regname = shift ;
@@ -171,28 +188,117 @@ sub getreg {
    }
 };
 
-### TODO: setreg()  To set a register
+### setreg()  To set a register
+sub setreg {
+   my $regname = shift ;
+   my $regval = shift ;
 
-# To pack a type 00 (little-endian integer) value, use this:
-# $msg = "~2001E1EC200E".$reg.unpack("H*",pack("V",0))  ;
-# To pack a type 01 (floating point) value, use this:
-# $msg = "~2001E1EC200E".$reg.unpack("H*",pack("f<",12.3))  ;
+   return undef  unless defined($regmap{$regname}) ;
 
-### Returns "~2001E1000000FDA7" on success
+   my $reg = $regmap{$regname} ;
 
+# print "$regname (aka $reg) = $regval\n" ;
 
-# Dump static configuration
-printf "DHCP: %02d (00=disabled, 01=enabled)\n", getreg("dhcp");
-printf "LINK: %02d\n", getreg("link");
-print  "  IP: ", getreg("ip"), " (only when DHCP=00)\n";
-print  "  GW: ", getreg("gw"), "\n";
-print  "  SM: ", getreg("sm"), "\n";
-print  "TRAP: ", getreg("tp"), "\n";
-print  "Rect: ", getreg("numRect"), "\n";
-print  "  N+: ", getreg("numRedRect"), "\n";
-print  " BBU: ", getreg("numBBU"), "\n";
-print  "Vout: ", getreg("outmV"), " mVolts (currently)\n" ;
-printf "Vout: %.3f Volts (at reset)\n", getreg("outVnv") ;
+   if( $reg =~ /^meta:/ ) {
+      # meta register, recurse to write  all the sub-values
+      my @subreg = split /:/, substr($reg,5) ;
+      my @subregval = split /[.]/, $regval ;
+      my $retval = 1 ;
+      return undef  unless( $#subreg == $#subregval ) ;
+
+      for my $i ( 0..$#subreg ) {
+         $retval &= setreg( $subreg[$i], $subregval[$i] ) or warn "Error setting sub-register ${subreg[$i]} to ${subregval[$i]}" ;
+      };
+      return $retval ;
+   };
+
+   my $msg = "~2001E1EC200E".$reg ;
+   if( $reg =~ /^01/ ) {
+      # Unpack a 32-bit little-endian floating point value
+      $msg .= toupper(unpack("H*",pack("f<",$regval+0.0))) ;
+   } elsif( $reg =~ /^00/ ) {
+      # 32-bit value (desired value in first byte)
+      $msg .= toupper(unpack("H*",pack("V",$regval+0))) ;
+   } else {
+      warn "Unrecognized type in register: $reg" ;
+      return undef ;
+   }
+   my $reply = "" ;
+# print "Sending: $msg\n" ;
+   syswrite( SCC, $msg.msgchk($msg)."\r" );
+   sysreadt( SCC, $reply, -1, 10 );
+   chomp $reply ;
+# print "Got reply: $reply\n" ;
+
+   ### Returns "~2001E1000000FDA7" on success
+   # Verify reply and checksum
+   if( $reply !~ /^~2001E1000000FDA7$/ ) {
+      print "WARNING: Unexpected response\nReceived: $reply\nExpected: ~2001E1000000FDA7", msgchk(substr($reply,0,-4)), "\n" ;
+      return undef ;
+   }
+
+   return 1 ;
+};
+
+if( 0 ) {
+   printf "LINK: %02d\n", getreg("link");
+
+   # Try setting the speed to 00  (auto?)
+   if( 0 ) {
+      $msg = "~2001E1EC200E"."00"."0E6E".unpack("H*",pack("V",0))  ;
+      syswrite( SCC, $msg.msgchk($msg)."\r" );
+      sysreadt( SCC, $reply, -1, 10 ); print $reply, "\n" ;
+   } elsif( 1 ) {
+      print "Set link to 00 -- " ;
+      if( setreg( "link", 0 ) ) {
+         print "SUCCESS.\n" ;
+      } else {
+         print "FAILED.\n" ;
+      };
+   };
+};
+
+### getall(): Read and display "all" parameters in a pretty format
+sub getall () {
+   # Dump static configuration
+   printf "DHCP: %02d (00=disabled, 01=enabled)\n", getreg("dhcp");
+   printf "LINK: %02d\n", getreg("link");
+   print  "  IP: ", getreg("ip"), " (only when DHCP=00)\n";
+   print  "  GW: ", getreg("gw"), "\n";
+   print  "  SM: ", getreg("sm"), "\n";
+   print  "TRAP: ", getreg("tp"), "\n";
+   print  "Rect: ", getreg("numRect"), "\n";
+   print  "  N+: ", getreg("numRedRect"), "\n";
+   print  " BBU: ", getreg("numBBU"), "\n";
+   print  "Vout: ", getreg("outmV"), " mVolts (currently)\n" ;
+   printf "Vout: %.3f Volts (at reset)\n", getreg("outVnv") ;
+
+   return ;
+};
+
+# print "#ARGV = $#ARGV\n" ;
+if( $#ARGV < 0 ) {
+   # No arguments, push an implied "all"
+   push @ARGV, "all" ;
+};
+
+# Go through list and process them.
+for my $arg ( @ARGV ) {
+# print "Processing arg: $arg\n" ;
+   if( $arg =~ m/=/ ) {
+      my ($k, $v) = split "=", $arg ;
+      print "Set $k to $v -- " ;
+      if( setreg( $k, $v ) ) {
+         print "SUCCESS.\n" ;
+      } else {
+         print "FAILED.\n" ;
+      };
+   } elsif( $arg eq "all" ) {
+      getall( );
+   } else {
+      printf "%-4s: %s\n", $labels{$arg}, getreg( $arg );
+   };
+};
 
 if( 0 ) {
 # Try setting the speed to 00  (auto?)
