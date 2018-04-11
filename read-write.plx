@@ -299,8 +299,10 @@ for my $arg ( @ARGV ) {
       };
    } elsif( $arg eq "all" ) {
       getall( );
-   } else {
+   } elsif( exists $labels{$arg} ) {
       printf "%4s: %s\n", $labels{$arg}, getreg( $arg );
+   } else {
+      printf "%s: Unrecognized label: %s\n", $0, $arg ;
    };
 };
 
