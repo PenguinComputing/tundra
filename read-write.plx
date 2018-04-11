@@ -8,7 +8,46 @@ use POSIX ;
 
 our $debug ;
 
-my $serialdev = shift @ARGV  || die "usage: $0 /path/to/serial [cmds]" ;
+# Registers *without* prefix or checksums
+#       Prefix:  ~2001E1EBA006 (to read)
+#                ~2001E1EC200E (to write)
+#       Checksum: see msgchk()
+our %regmap = (
+      dhcp => "000E65",
+      link => "000E6E",
+      ip   => "meta:ip1:ip2:ip3:ip4",
+      ip1  => "000C52", ip2  => "000C53", ip3  => "000C54", ip4  => "000C55",
+      gw   => "meta:gw1:gw2:gw3:gw4",
+      gw1  => "000C58", gw2  => "000C59", gw3  => "000C5A", gw4  => "000C5B",
+      sm   => "meta:sm1:sm2:sm3:sm4",
+      sm1  => "000C5E", sm2  => "000C5F", sm3  => "000C60", sm4  => "000C61",
+      tp   => "meta:tp1:tp2:tp3:tp4",
+      trap => "meta:tp1:tp2:tp3:tp4",
+      tp1  => "000C6A", tp2  => "000C6B", tp3  => "000C6C", tp4  => "000C6D",
+
+      outmV => "010110", outVnv => "0100A4",
+      numRect => "000E6B",
+      numRedRect => "000E6C",
+      numBBU => "000E6D",
+   );
+
+our %labels = (
+      dhcp => "DHCP",
+      link => "LINK",
+      ip   => "IP",
+      gw   => "GW",
+      sm   => "SM",
+      tp   => "TRAP",
+      trap => "TRAP",
+      outmV => "Vout",
+      outVnv => "Vout(NV)",
+      numRect => "Rect",
+      numRedRect => "N+R",
+      numBBU => "BBU",
+   );
+
+
+my $serialdev = shift @ARGV  || usage() ;
 sysopen( SCC, $serialdev, O_NONBLOCK|O_RDWR ) or die "Unable to open $0: $!" ;
 
 # Configure the serial port
@@ -110,44 +149,27 @@ sub msgchk ($) {
    return toupper($sum) ;
 }
 
-# Registers *without* prefix or checksums
-#       Prefix:  ~2001E1EBA006 (to read)
-#                ~2001E1EC200E (to write)
-#       Checksum: see msgchk()
-our %regmap = (
-      dhcp => "000E65",
-      link => "000E6E",
-      ip   => "meta:ip1:ip2:ip3:ip4",
-      ip1  => "000C52", ip2  => "000C53", ip3  => "000C54", ip4  => "000C55",
-      gw   => "meta:gw1:gw2:gw3:gw4",
-      gw1  => "000C58", gw2  => "000C59", gw3  => "000C5A", gw4  => "000C5B",
-      sm   => "meta:sm1:sm2:sm3:sm4",
-      sm1  => "000C5E", sm2  => "000C5F", sm3  => "000C60", sm4  => "000C61",
-      tp   => "meta:tp1:tp2:tp3:tp4",
-      trap => "meta:tp1:tp2:tp3:tp4",
-      tp1  => "000C6A", tp2  => "000C6B", tp3  => "000C6C", tp4  => "000C6D",
-
-      outmV => "010110", outVnv => "0100A4",
-      numRect => "000E6B",
-      numRedRect => "000E6C",
-      numBBU => "000E6D",
-   );
-
-our %labels = (
-      dhcp => "DHCP",
-      link => "LINK",
-      ip   => "IP",
-      gw   => "GW",
-      sm   => "SM",
-      tp   => "TRAP",
-      trap => "TRAP",
-      outmV => "Vout",
-      outVnv => "Vout(NV)",
-      numRect => "Rect",
-      numRedRect => "N+R",
-      numBBU => "BBU",
-   );
-
+sub usage {
+   print "usage: $0 /path/to/serial [cmds]\n" ;
+   print "where:  cmds  are either 'register' to read or 'register=value' to write\n" ;
+   print "        register  is one of the following:\n" ;
+   print "   all -- all registers (read only)\n" ;
+   my @noname = () ;
+   for my $regname ( sort keys %regmap ) {
+      if( exists $labels{$regname} ) {
+         print "   $regname -- ", $labels{$regname}, "\n" ;
+      } else {
+         push @noname, $regname ;
+      }
+   }
+   if( $debug ) {
+      for my $regname ( @noname ) {
+         print "   $regname\n" ;
+      }
+   }
+   exit( 1 );
+}
+   
 
 sub getreg {
    my $regname = shift ;
@@ -243,8 +265,8 @@ sub setreg {
 ### getall(): Read and display "all" parameters in a pretty format
 sub getall () {
    # Dump static configuration
-   printf "DHCP: %02d (00=disabled, 01=enabled)\n", getreg("dhcp");
-   printf "LINK: %02d\n", getreg("link");
+   print  "DHCP: ", getreg("dhcp"), " (0=disabled, 1=enabled)\n";
+   print  "LINK: ", getreg("link"), " (0=auto, 2=10/Half)\n";
    print  "  IP: ", getreg("ip"), " (only when DHCP=00)\n";
    print  "  GW: ", getreg("gw"), "\n";
    print  "  SM: ", getreg("sm"), "\n";
@@ -278,7 +300,7 @@ for my $arg ( @ARGV ) {
    } elsif( $arg eq "all" ) {
       getall( );
    } else {
-      printf "%-4s: %s\n", $labels{$arg}, getreg( $arg );
+      printf "%4s: %s\n", $labels{$arg}, getreg( $arg );
    };
 };
 
