@@ -1,0 +1,2007 @@
+--
+-- Vertiv Co
+-- Power MIB
+--
+
+EES-POWER-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+	MODULE-IDENTITY, OBJECT-TYPE, NOTIFICATION-TYPE,
+	Integer32, Counter32, mgmt, enterprises, IpAddress, TimeTicks
+		FROM SNMPv2-SMI
+	TEXTUAL-CONVENTION, DisplayString, DateAndTime
+		FROM SNMPv2-TC;
+		
+
+
+ --         IMPORTS
+ --                 mgmt, NetworkAddress, IpAddress, Counter, Gauge,
+ --                         TimeTicks
+ --                   FROM RFC1155-SMI
+
+          stdmib-2      OBJECT IDENTIFIER ::= { mgmt 1 }
+
+          system	OBJECT IDENTIFIER ::= { stdmib-2 1 }
+
+sysDescr OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		A textual description of the Power System entity.  It is formatted as:
+		Vertiv - 12VDC Shelf Control Card - product name - SW Vxx.xx.xx - HW Axx - MAC address, where:
+		product name - a string like 1M522B
+		xx.xx.xx - version number like 01.00.00
+		"
+	::= { system 1 }
+
+sysObjectID OBJECT-TYPE
+	SYNTAX OBJECT IDENTIFIER
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		1.3.6.1.4.1.6302.3.1
+		which is the base OID for the information in this MIB
+		."
+ 	::= { system 2 }
+		
+sysUpTime OBJECT-TYPE
+              SYNTAX  TimeTicks
+              MAX-ACCESS read-only
+              STATUS  current
+              DESCRIPTION
+                      "The time (in hundredths of a second) since the
+                      network management portion of the system was last
+                      re-initialized."
+              ::= { system 3 }
+
+sysContact OBJECT-TYPE
+              SYNTAX  DisplayString (SIZE (0..255))
+              MAX-ACCESS read-write
+              STATUS  current
+              DESCRIPTION
+                      "The textual identification of the contact person
+                      for this managed node, together with information
+                      on how to contact this person."
+              ::= { system 4 }
+
+sysName OBJECT-TYPE
+              SYNTAX  DisplayString (SIZE (0..255))
+              MAX-ACCESS read-write
+              STATUS  current
+              DESCRIPTION
+                      "An administratively-assigned name for this
+                      managed node.  By convention, this is the node's
+                      fully-qualified domain name."
+              ::= { system 5 }
+
+sysLocation OBJECT-TYPE
+              SYNTAX  DisplayString (SIZE (0..255))
+              MAX-ACCESS read-write
+              STATUS  current
+              DESCRIPTION
+                      "The physical location of this node (e.g.,
+                      `telephone closet, 3rd floor')."
+              ::= { system 6 }
+
+sysServices OBJECT-TYPE
+              SYNTAX  INTEGER (0..127)
+              MAX-ACCESS read-only
+              STATUS  current
+              DESCRIPTION
+                      "A value which indicates the set of services that
+                      this entity primarily offers.
+
+                      The value is a sum.  This sum initially takes the
+                      value zero, Then, for each layer, L, in the range
+                      1 through 7, that this node performs transactions
+                      for, 2 raised to (L - 1) is added to the sum.  For
+                      example, a node which performs primarily routing
+                      functions would have a value of 4 (2^(3-1)).  In
+                      contrast, a node which is a host offering
+                      application services would have a value of 72
+                      (2^(4-1) + 2^(7-1)).  Note that in the context of
+                      the Internet suite of protocols, values should be
+                      calculated accordingly:
+
+                           layer  functionality
+                               1  physical (e.g., repeaters)
+                               2  datalink/subnetwork (e.g., bridges)
+                               3  internet (e.g., IP gateways)
+                               4  end-to-end  (e.g., IP hosts)
+                               7  applications (e.g., mail relays)
+
+                      For systems including OSI protocols, layers 5 and
+                      6 may also be counted."
+              ::= { system 7 }
+
+
+
+--
+-- Node definitions
+--
+
+ees OBJECT IDENTIFIER ::= { enterprises 6302 }
+
+global OBJECT IDENTIFIER ::= { ees 3 }
+
+powerMIB MODULE-IDENTITY
+	LAST-UPDATED "201805160526Z"
+	ORGANIZATION "
+		Vertiv Co (EES)"
+	CONTACT-INFO "
+		Vertiv Co
+		141 82 Stockholm
+		Sweden"
+	DESCRIPTION "
+		Vertiv Co Power MIB, revision 1E"
+
+    REVISION     "201805160526Z"
+    DESCRIPTION
+	"Updated version: Added rectifier and BBU version info"
+    REVISION     "201709180743Z"
+    DESCRIPTION
+	"Updated version: Added alarmhistory, change Emerson to Vertiv in sysDescr"
+    REVISION     "201709150743Z"
+    DESCRIPTION
+	"Updated version: Added alarmtable"
+    REVISION     "201709150742Z"
+    DESCRIPTION
+	"Updated version: Added battDischargeTo30; change LearningModeState to LearningMode"
+    REVISION     "201702011234Z"
+    DESCRIPTION
+	"Added back in some revision history"
+    REVISION     "201701091642Z"
+    DESCRIPTION
+	"Updated version: fixed BBU status MSB/LSB, made names consistent, and added LearningCommandFlag"
+    REVISION     "201605111629Z"
+    DESCRIPTION
+	"Added controlEPO object to perform software equivalent to EPO input"
+    REVISION     "201510211629Z"
+    DESCRIPTION
+	"Updated version"
+    REVISION     "201402181942Z"
+    DESCRIPTION
+	"Initial version"
+
+
+
+	::= { global 1 }
+
+--
+-- Textual conventions
+--
+
+ShelfStatus ::= TEXTUAL-CONVENTION
+	STATUS current
+	DESCRIPTION "
+		This integer value represents the operational or administrative
+		status of the system.
+		Operational values:
+		(1) normal - there are no activated alarms
+		(2) alarmed - alarm conditions active
+		"
+	SYNTAX INTEGER {
+		normal(1),
+		alarm(2)
+		}
+		
+EnableFlag ::= TEXTUAL-CONVENTION
+	STATUS current
+	DESCRIPTION "
+		Generally, enabled/on/OK (0) or disabled/off/notOK (1).
+
+		Enable/Disable fields are defined:
+		Set = 0 to enable
+		Set = 1 to disable
+		Get returns 0 if enabled and running ok
+		Get returns 1 if disabled
+		Get returns 2 if failed
+		Get returns 3 if missing
+		"
+	SYNTAX INTEGER {
+		enabled-on-OK(0),
+		disabled-off-notOK(1),
+		failed(2),
+		missing(3)
+		}
+		
+LearningCommandFlag ::= TEXTUAL-CONVENTION
+	STATUS current
+	DESCRIPTION "
+		Set to 0 to skip learning mode
+		Set to 1 to enable learning mode
+		"
+	SYNTAX INTEGER {
+		skip-learning-mode(0),
+		enable-learning-mode(1)
+		}
+
+DischargeFlag ::= TEXTUAL-CONVENTION
+	STATUS current
+	DESCRIPTION "
+		0 for normal operation
+		1 for discharge below 30% absolute state of charge, for shipping
+		"
+	SYNTAX INTEGER {
+		normal-mode(0),
+		under30-mode(1)
+		}
+
+AlarmType ::= TEXTUAL-CONVENTION
+	STATUS current
+	DESCRIPTION "
+		AlarmType is an integer used to identify the alarm
+		"
+	SYNTAX INTEGER {
+		armtypeStartACFail(2),                 
+		armtypeEndACFail(3),   
+		armtypeStartRectFail(4),
+		armtypeEndRectFail(5),
+		armtypeStartBattFail(6),
+		armtypeEndBattFail(7),
+		armtypeStartEPO(8),
+		armtypeStartBattEOL(9),
+		armtypeEndBattEOL(10),
+		armtypeCurrLimitOverride(11),
+		armtypeStartNotEnoughEDR(12),
+		armtypeEndNotEnoughEDR(13),
+		armtypeLearningReq(14),
+		armtypeLearningSuccess(15),
+		armtypeLearningFail(16)
+ 	}
+
+--
+-- 1.1 Identification of the plant 
+--
+
+info OBJECT IDENTIFIER ::= { powerMIB 1 }
+
+identName OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		The customer's name for this power shelf. This name should be set by
+		the administrator.
+		"
+	::= { info 1 }
+
+identSerialNumber OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		The serial number of this controller
+		This is a string like BJ62560563.
+		This string can be used to uniquely identify the controller.
+		"
+	::= { info 2 }
+
+identShelfInventory OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Shelf inventory.  It is a comma-separated list.
+		This is a string like 4, 1R123000, 4, B123000.
+		Each entry in the list is the model number of the power unit.
+		The list is not in physical order, since this cannot be automatically detected.
+		Empty slots are not listed.
+		"
+	::= { info 3 }
+
+--
+-- 1.2 Rated Capacity 
+--
+
+capacity OBJECT IDENTIFIER ::= { powerMIB 2 }
+
+capacityRectifierPowerCapacity OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Total shelf rectifier power (W).
+		If rectifiers have a current limit, then the available rectifier power is capped based on the current limit.
+		"
+	::= { capacity 1 }
+
+capacityBatteryPowerCapacity OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Total shelf Battery power (W)."
+	::= { capacity 2 }
+
+--
+-- 1.3 Power Shelf Status 
+--
+
+status OBJECT IDENTIFIER ::= { powerMIB 3 }
+
+statusShelfStatus OBJECT-TYPE
+	SYNTAX ShelfStatus
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		(1) normal - there are no activated alarms
+		(2) alarmed - alarm conditions active
+		"
+	::= { status 1 }
+
+statusBatteryStateOfCharge OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Battery State-of-Charge (% of total available).
+		This will be zero if there are no BBUs present.
+		"
+	::= { status 2 }
+
+statusACStatus OBJECT-TYPE
+	SYNTAX EnableFlag
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		AC Status.  Enabled/on/OK (0) or disabled/off/notOK (1).
+		"
+	::= { status 3 }
+
+statusIncomingACVoltage OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Incoming AC Voltage (V)
+		Average reported by EDRs.
+		"
+	::= { status 4 }
+
+statusShelfOutputVoltage OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Shelf output DC voltage (mV)
+		Average reported by the EDRs and BBUs which have are providing current
+		EDRs or BBUs which are not providing current are excluded from the average.
+		"
+	::= { status 5 }
+
+statusShelfOutputCurrent OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Shelf output DC current (A)
+		Average reported by EDRs and BBUs.
+		EDRs or BBUs which are not providing current are excluded from the average.
+		"
+	::= { status 6 }
+
+statusShelfOutputPower OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Shelf output DC power (W).  This is the output voltage * output current
+		Total reported by EDRs and BBUs.
+		"
+	::= { status 7 }
+
+statusBatteryHoldUp OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Estimated Battery hold-up time (seconds) 
+		"
+	::= { status 8 }
+
+statusTimeToCharge OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Estimate timed to fully charge batteries (minutes)
+		"
+	::= { status 9 }
+	
+--
+-- 1.4 Shelf Control 
+--
+
+control OBJECT IDENTIFIER ::= { powerMIB 4 }
+
+controlAllRectifierEnabled OBJECT-TYPE
+	SYNTAX EnableFlag
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		All rectifiers enabled or disabled.
+		Enabled/on/OK (0) or disabled/off/notOK (1).
+		"
+	::= { control 1 }
+
+controlAllBatteryEnabled OBJECT-TYPE
+	SYNTAX EnableFlag
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		All Batteries enabled or disabled.
+		Enabled/on/OK (0) or disabled/off/notOK (1).
+		"
+	::= { control 2 }
+
+controlControllerReset OBJECT-TYPE
+	SYNTAX EnableFlag
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		Set to reset the controller.
+		Write any value to reset the controller.
+		"
+	::= { control 3 }
+
+controlManualMode OBJECT-TYPE
+	SYNTAX EnableFlag
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		Set to put the controller in manual mode (eco-mode disabled)
+		or normal mode (eco-mode enabled).
+		manual mode (0) or normal mode (1).   
+		Defaults to 1 for normal mode.
+		Must be in manual mode with eco-mode disabled to
+		enable/disable rectifiers or batteries.
+		"
+	::= { control 4 }
+
+controlEPO OBJECT-TYPE
+	SYNTAX EnableFlag
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		Send the EPO command to all rectifiers and BBUs.
+		Rectifiers and BBUs will not provide output power until
+		AC Power is cycled or the unit is removed and then inserted into a shelf
+		Write 0 to this flag to trigger the EPO.
+		"
+	::= { control 5 }
+
+
+
+--
+-- 1.5 Shelf Configuration 
+--
+
+config OBJECT IDENTIFIER ::= { powerMIB 5 }
+
+configNumRectifiers OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		Expected number of rectifiers, including redundant rectifiers"
+	::= { config 1 }
+
+configNumRedundantRectifiers OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		Expected number of redundant rectifiers"
+	::= { config 2 }
+
+configNumBattery OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		Expected number of batteries"
+	::= { config 3 }
+
+configRectifierOutputVoltageSetpoint OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		Rectifier output voltage set-point (mV)"
+	::= { config 4 }
+
+
+configRectifierTotalCurrLimit OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		Rectifier total output (DC) current limit (A) (for all rectifiers)"
+	::= { config 5 }
+
+
+configTrapIPAddress OBJECT-TYPE
+	SYNTAX IpAddress
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		The destination IP address for traps generated by the SCC.
+		Example: 10.192.210.40
+		"
+	::= { config 6 }
+
+
+configSystemTime OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		The system date/time.  Formatted as DD-MM-YYYY hh:mm:ss
+		Example: 31-10-2013 09:01:01
+		"
+	::= { config 7 }
+
+configComplete OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		This parameter is set to True (1) when the shelf configuration is complete.
+		The SCC will start to send status updates when this is set to True (1).
+		"
+	::= { config 8 }
+
+configSystemTimeEx OBJECT-TYPE
+	SYNTAX DateAndTime
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		The system date/time.  See DateAndTime in SNMPv2-TC for format details.
+		This field is interchangeable with configSystemTime.  The
+		controller time/date can be get/set with either field.  Both
+		fields return the same controller local time, regardless of
+		which is used to set the time.
+		"
+	::= { config 9 }
+
+configTrapTimeFormat OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		If configTimeFormat is set to any non-zero value, the SCC 
+		will send powerEventsEx instead of powerEvents.  If
+		configTimeFormat is set to 0 or is not set, the SCC 
+		will powerEvents.
+		"
+	::= { config 10 }
+
+
+
+--
+-- 1.6 Detailed Rectifier Data 
+--
+
+rectNumberPresent OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		The number of rectifiers listed in the snmp table.
+		Failed rectifiers will stay in the list, so that 
+		their serial number and other data is available.
+		"
+	::= { powerMIB 20 }
+
+
+rectDetailedDataTable OBJECT-TYPE
+	SYNTAX SEQUENCE OF RectDetailedData
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION "
+		Table holding detailed information about each rectifier (EDR) in the shelf.
+		"
+	::= { powerMIB 21 }
+
+rectDetailedData OBJECT-TYPE
+	SYNTAX RectDetailedData
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION "
+		The information about a single rectifier.
+		"
+	INDEX { rectIndex }
+	::= { rectDetailedDataTable 1 }
+
+RectDetailedData ::= SEQUENCE {
+	rectIndex Integer32,
+	rectRectifierState EnableFlag,
+	rectIncomingACVoltage Integer32,
+	rectOutputVoltage Integer32,
+	rectOutputCurrent Integer32,
+	rectOutputPower Integer32,
+	rectTemperature Integer32,
+	rectACStatus EnableFlag,
+	rectDCStatus EnableFlag,
+	rectRunningTime Integer32,
+	rectFanOK EnableFlag,
+	rectRatedOutput Integer32,
+	rectRectifierModel DisplayString,
+	rectRectifierSerialNumber DisplayString,
+	rectLEDFlash EnableFlag,
+	rectDetailedStatus Integer32,
+	rectID Integer32,
+	rectIDString DisplayString,
+	rectIncomingACCurrent Integer32,
+	rectHWVersion DisplayString,
+	rectSWVersion DisplayString,
+	rectDateCode DisplayString
+	}
+	
+rectIndex OBJECT-TYPE
+	SYNTAX Integer32(1..27)
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		The index number for this rectifier
+		."
+	::= { rectDetailedData 1 }
+
+
+rectRectifierState OBJECT-TYPE
+	SYNTAX EnableFlag
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		Returns 0 if enabled and running ok
+		Returns 1 if disabled
+		Returns 2 if failed
+		Returns 3 if missing
+		"
+	::= { rectDetailedData 2 }
+
+rectIncomingACVoltage OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Incoming AC Voltage (V)"
+	::= { rectDetailedData 3 }
+
+rectOutputVoltage OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Output DC voltage (mV)"
+	::= { rectDetailedData 4 }
+
+
+rectOutputCurrent OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Output DC current (A)"
+	::= { rectDetailedData 5 }
+
+
+rectOutputPower OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Output DC power (W)"
+	::= { rectDetailedData 6 }
+
+rectTemperature OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Temperature (degrees C)"
+	::= { rectDetailedData 7 }
+
+rectACStatus OBJECT-TYPE
+	SYNTAX EnableFlag
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		AC Status.
+		Enabled/on/OK (0) or disabled/off/notOK (1).
+		"
+	::= { rectDetailedData 8 }
+
+rectDCStatus OBJECT-TYPE
+	SYNTAX EnableFlag
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		DC Status.
+		Enabled/on/OK (0) or disabled/off/notOK (1).
+		"
+	::= { rectDetailedData 9 }
+
+rectRunningTime OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Running time (hours)"
+	::= { rectDetailedData 10 }
+
+
+rectFanOK OBJECT-TYPE
+	SYNTAX EnableFlag
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Fan OK.
+		Enabled/on/OK (0) or disabled/off/notOK (1).
+		"
+	::= { rectDetailedData 11 }
+
+rectRatedOutput OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Rated output (W)"
+	::= { rectDetailedData 12 }
+
+rectRectifierModel OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		The manufacturers model number of the module."
+	::= { rectDetailedData 13 }
+
+rectRectifierSerialNumber OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		The manufacturers serial number of the module.	"
+	::= { rectDetailedData 14 }
+
+rectLEDFlash OBJECT-TYPE
+	SYNTAX EnableFlag
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		Blink/flash the LED.  This is used so that user can identify the EDR/BBU.
+		Blink (0) or Not blinking (1).
+		"
+	::= { rectDetailedData 15 }
+
+
+rectDetailedStatus OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Detailed status information about the rectifier.
+		This value will be 0 if there is a communication failure with the rectifier.
+
+		MSB		Over-voltage
+		bit		Over-temperature
+		bit		Rectifier failure
+		bit		Rectifier protection
+		bit		Fan failure
+		bit		Rectifier EEPROM failure
+		bit		AC power limiting
+		bit		Power limitation by temperature/status value
+		bit		Rectifier power limitation/status value
+		bit		Rectifier on/off/status value
+		bit		Fan full-speed/status value
+		bit		Rectifier WALK-In function enabled/status value
+		bit		Relay action for over-voltage disconnection/status value
+		bit		Rectifier identification/status value
+		bit		Rectifier current sharing failure
+		bit		Rectifier CAN error status
+		bit		Rectifier sequence Startup enabled/status value
+		bit		AC Low voltage
+		bit		Rectifier AC unbalance/status value
+		bit		AC phase loss
+		bit		Severe current unbalance
+		bit		Module ID overlap
+		bit		AC over voltage
+		bit		Rectifier PFC failure
+		bit		current unbalance
+		bit		position pin failure
+		bit		Over loading
+		bit		Low output voltage
+		bit		Inner communication fault
+		bit		Output fuse broken
+		bit		Reserved
+		LSB		Reserved
+		"
+	::= { rectDetailedData 16 }
+
+rectID OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		User-defined rectifier ID Integer32 field."
+	::= { rectDetailedData 17 }
+
+rectIDString OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		User-defined rectifier ID String field."
+	::= { rectDetailedData 18 }
+
+rectIncomingACCurrent OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Incoming AC Current (A)"
+	::= { rectDetailedData 19 }
+	
+	rectHWVersion OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Hardware version number, in the form cxx."
+	::= { rectDetailedData 20 }
+	
+	rectSWVersion OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Software version number, in the form x.yy."
+	::= { rectDetailedData 21 }
+
+	rectDateCode OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Manufacturing date code, in the form YYMM, where YY represents the year and MM represents the month."
+	::= { rectDetailedData 22 }
+
+--
+-- 1.7 Detailed Battery Data 
+--
+
+battNumberPresent OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		The number of batteries listed in the snmp table.
+		Failed batteries will stay in the list, so that 
+		their serial number and other data is available.
+		"
+	::= { powerMIB 22 }
+
+
+battDetailedDataTable OBJECT-TYPE
+	SYNTAX SEQUENCE OF BattDetailedData
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION "
+		Table holding detailed information about each battery (BBU) in the shelf.
+		"
+	::= { powerMIB 23 }
+
+battDetailedData OBJECT-TYPE
+	SYNTAX BattDetailedData
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION "
+		The information about a single battery.
+		"
+	INDEX { battIndex }
+	::= { battDetailedDataTable 1 }
+
+BattDetailedData ::= SEQUENCE {
+	battIndex Integer32,
+	battState EnableFlag,
+	battReserved1 Integer32,
+	battOutputVoltage Integer32,
+	battOutputCurrent Integer32,
+	battOutputPower Integer32,
+	battTemperature Integer32,
+	battACStatus EnableFlag,
+	battDCStatus EnableFlag,
+	battRunningTime Integer32,
+	battFanOK EnableFlag,
+	battRatedOutput Integer32,
+	battModel DisplayString,
+	battSerialNumber DisplayString,
+	battReserved2 Integer32,
+	battStateOfCharge Integer32,
+	battTimeToCharge Integer32,
+	battEndOfLife EnableFlag,
+	battLEDFlash EnableFlag,
+	battDetailedStatus Integer32,
+	battLearningMode LearningCommandFlag,
+	battID Integer32,
+	battIDString DisplayString,
+	battDischargeTo30 Integer32,
+	battReserved3 Integer32,
+	battBelow30 Integer32,
+	battVersion DisplayString,
+	battDateCode DisplayString
+	}
+
+battIndex OBJECT-TYPE
+	SYNTAX Integer32(1..27)
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		The index number for this battery
+		."
+	::= { battDetailedData 1 }
+
+battState OBJECT-TYPE
+	SYNTAX EnableFlag
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		Returns 0 if enabled and running ok
+		Returns 1 if disabled
+		Returns 2 if failed
+		Returns 3 if missing
+		Returns 4 if learning mode
+		"
+	::= { battDetailedData 2 }
+
+battReserved1 OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+	reserved for future use; SCC will return 0 if this value is requested
+	"
+	::= { battDetailedData 3 }
+
+battOutputVoltage OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Output DC voltage (mV)"
+	::= { battDetailedData 4 }
+
+battOutputCurrent OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Output DC current (A)"
+	::= { battDetailedData 5 }
+
+battOutputPower OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Output DC power (W)"
+	::= { battDetailedData 6 }
+
+battTemperature OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Temperature (degrees C)"
+	::= { battDetailedData 7 }
+
+battACStatus OBJECT-TYPE
+	SYNTAX EnableFlag
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		AC Status.
+		Enabled/on/OK (0) or disabled/off/notOK (1).
+		"
+	::= { battDetailedData 8 }
+
+battDCStatus OBJECT-TYPE
+	SYNTAX EnableFlag
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		DC Status.
+		Enabled/on/OK (0) or disabled/off/notOK (1).
+		"
+	::= { battDetailedData 9 }
+
+battRunningTime OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Running time (hours)"
+	::= { battDetailedData 10 }
+
+
+battFanOK OBJECT-TYPE
+	SYNTAX EnableFlag
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Fan OK.
+		Enabled/on/OK (0) or disabled/off/notOK (1).
+		"
+	::= { battDetailedData 11 }
+
+battRatedOutput OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Rated Battery output power @ 90 seconds (W)"
+	::= { battDetailedData 12 }
+
+battModel OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		The manufacturers model number of the module."
+	::= { battDetailedData 13 }
+
+battSerialNumber OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		The manufacturers serial number of the module."
+	::= { battDetailedData 14 }
+
+battReserved2 OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		reserved for future use; SCC will return 0 if this value is requested
+	"
+	::= { battDetailedData 15 }
+
+battStateOfCharge OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Battery State-of-Charge (% of total available)"
+	::= { battDetailedData 16 }
+
+battTimeToCharge OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Estimate time to fully charge Battery (seconds)"
+	::= { battDetailedData 17 }
+
+battEndOfLife OBJECT-TYPE
+	SYNTAX EnableFlag
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Battery end of life Warning (true if near end of life).
+		OK (0) or EOL (1).
+		"
+	::= { battDetailedData 18 }
+
+battLEDFlash OBJECT-TYPE
+	SYNTAX EnableFlag
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		Blink/flash the LED.  This is used so that user can identify the EDR/BBU.
+		Blink (0) or Not blinking (1).
+		"
+	::= { battDetailedData 19 }
+
+battDetailedStatus OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Detailed status information about the battery.
+		This value will be 0 if there is a communication failure with the unit.
+		MSB		BBU Status			1: ok   0: failed
+		bit		BBU Enabled/Disabled - by SCC	1: Enabled   0: Disabled
+		bit		AC Status			1: ok/good   0: not-ok/failed
+		bit		DC Status - BBU can provide DC	1: ok/good   0: not-ok/failed
+		bit		Fan Status			1: ok/good   0: not-ok/failed
+		bit		Battery in learning cycle	1: True   0: False
+		bit		Battery in pre-charge state	1: True   0: False
+		bit		Charging			1: True   0: False
+		bit		Charging disabled by SCC	1: True   0: False
+		bit		Discharging			1: True   0: False
+		bit		Fan speed			1: Full   0: Automatic
+		bit		Learning mode request		1: True   0: False
+		bit		Over-temperature warning	1: Warning   0: No warning
+		bit		Under-temperature warning	1: Warning   0: No warning
+		bit		Charging problem warning	1: Warning   0: No warning
+		bit		Discharge problem warning	1: Warning   0: No warning
+		bit		Internal heater operational	1: True   0: False
+		bit		Charging disabled for protection 1: True/Fault   0: False
+		bit		Over-temperature protection on	1: True/Fault   0: False
+		bit		Under-temperature protection on	1: True/Fault   0: False
+		bit		Battery end-of-life warning 	1: End-of-Life   0: Ok
+		bit		Over-voltage protection on	1: True/Fault   0: False
+		bit		Under-voltage protection on	1: True/Fault   0: False
+		bit		Over-current protection on	1: True/Fault   0: False
+		bit		Over-voltage warning		1: Warning   0: No warning
+		bit		Under-voltage warning		1: Warning   0: No warning
+		bit		Over-current warning		1: Warning   0: No warning
+		bit		DC output abnormal warning	1: Warning   0: No warning
+		bit		MCU loss of control		1: True/Fault   0: False
+		bit		<reserved>			1: True   0: False
+		bit		<reserved>			1: True   0: False
+		LSB		Battery learning cycle requested 1: True   0: False
+	"
+	::= { battDetailedData 20 }
+
+
+battLearningMode OBJECT-TYPE
+	SYNTAX LearningCommandFlag
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		Set to 0 to skip learning mode
+		Set to 1 to enable learning mode
+		"
+	::= { battDetailedData 21 }
+
+battID OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		User-defined battery ID Integer32 field."
+	::= { battDetailedData 22 }
+
+battIDString OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		User-defined battery ID String field."
+	::= { battDetailedData 23 }
+
+battDischargeTo30 OBJECT-TYPE
+	SYNTAX DischargeFlag
+	MAX-ACCESS read-write
+	STATUS current	
+	DESCRIPTION "
+		Set to 1 to trigger the BBU mode which lets
+		the BBU discharge to a point below 30% absolute state of charge
+		This mode is intended to be a one-time exception to
+			put the BBU in a state where it can be shipped.
+		Set it back to 0 after the BBU is discharged.
+		"
+	::= { battDetailedData 24 }
+
+battReserved3 OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+	reserved for future use; SCC will return 0 if this value is requested
+	"
+	::= { battDetailedData 25 }
+
+battBelow30 OBJECT-TYPE
+	SYNTAX DischargeFlag
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION "
+		Returns 0 if the BBU is above 30% absolute state-of-charge
+		Returns 1 if the BBU is below 30% absolute state-of-charge 
+		"
+	::= { battDetailedData 26 }
+	
+	battVersion OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Version number, in the form cxx dyy."
+	::= { battDetailedData 27 }
+
+	battDateCode OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Manufacturing date code, in the form YYMM, where YY represents the year and MM represents the month."
+	::= { battDetailedData 28 }
+--
+-- Events/traps 
+--
+
+alarmDetails OBJECT IDENTIFIER ::= { powerMIB 40 } 
+
+alarmTime OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS accessible-for-notify
+	STATUS current
+	DESCRIPTION "
+		Date and time when event occured (local time), including
+		timezone if supported by controller.
+		Formatted as DD-MM-YYYY hh:mm:ss
+		"
+	::= { alarmDetails 1 }
+
+
+alarmDescription OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS accessible-for-notify
+	STATUS current
+	DESCRIPTION "
+		Free-text description of alarm.
+		This should be the specific reason that the trap is occurring.
+		For example, a rectifier failure could be caused by over-voltage, over-temperature, etc.s
+	"
+	::= { alarmDetails 2 }
+
+alarmSerialNumber OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS accessible-for-notify
+	STATUS current
+	DESCRIPTION "
+		The serial number of the battery or rectifier associated with the failure."
+	::= { alarmDetails 3 }
+
+alarmDetailedStatus OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS accessible-for-notify
+	STATUS current
+	DESCRIPTION "
+		The detailed status of the battery or rectifier associated with the trap.
+		See rectDetailedStatus and battDetailedStatus for the details.
+	"
+	::= { alarmDetails 4 }
+
+
+powerEvents OBJECT IDENTIFIER ::= { powerMIB 42 }
+
+trapShelfStatus NOTIFICATION-TYPE
+	OBJECTS {
+		statusShelfStatus, 
+		statusBatteryStateOfCharge, 
+		statusACStatus, 
+		statusIncomingACVoltage, 
+		statusShelfOutputVoltage, 
+		statusShelfOutputCurrent,  
+		statusShelfOutputPower,
+		statusBatteryHoldUp, 
+		statusTimeToCharge 
+		}
+	STATUS current
+	DESCRIPTION "
+		Shelf status, sent to the configured trap addresss,
+		on a periodic basis.
+		The fields in this trap are:
+			ShelfStatus, 
+			BatteryStateOfCharge, 
+			ACStatus, 
+			IncomingACVoltage, 
+			ShelfOutputVoltage, 
+			ShelfOutputCurrent,  
+			ShelfOutputPower, 
+			BatteryHoldUp, 
+			TimeToCharge 
+		"
+	::= { powerEvents 1 }
+
+trapStartACFail NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTime,
+		alarmDescription
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when any rectifier reports AC Mains failure.  
+		"
+	::= { powerEvents 2 }
+
+trapEndACFail NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTime,
+		alarmDescription
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when the AM Mains Failure condition clears.
+		"
+	::= { powerEvents 3 }
+
+trapStartRectFail NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTime,
+		alarmDescription,
+		alarmSerialNumber,
+		alarmDetailedStatus,
+		capacityRectifierPowerCapacity,
+		capacityBatteryPowerCapacity 
+  		}
+	STATUS current
+	DESCRIPTION "
+		Sent when a rectifier reports any failure, 
+		when a rectifier is no longer present, 
+		"
+	::= { powerEvents 4 }
+
+trapEndRectFail NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTime,
+		alarmDescription,
+		alarmSerialNumber,
+		capacityRectifierPowerCapacity,
+		capacityBatteryPowerCapacity  
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when the RectFail condition ends.
+		"
+	::= { powerEvents 5 }
+
+trapStartBattFail NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTime,
+		alarmDescription,
+		alarmSerialNumber,
+		alarmDetailedStatus,
+		capacityRectifierPowerCapacity,
+		capacityBatteryPowerCapacity  
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when a BBU reports any failure, 
+		when a BBU is no longer present, 
+		or when the number of BBUs is less than 
+		the number of expected BBUs 
+		when the configuration complete flag is set.
+		"
+	::= { powerEvents 6 }
+
+trapEndBattFail NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTime,
+		alarmDescription,
+		alarmSerialNumber,
+		capacityRectifierPowerCapacity,
+		capacityBatteryPowerCapacity  
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when the BattFail condition ends.
+		"
+	::= { powerEvents 7 }
+
+trapStartEPO NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTime,
+		alarmDescription
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when the power-off signal is received.
+		This signal will shutdown all rectifiers and batteries.
+		This will, in turn, shut down the controller.
+		"
+	::= { powerEvents 8 }
+
+trapStartBattEOL NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTime,
+		alarmDescription,
+		alarmSerialNumber 
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when any battery reports end-of-life.
+		"
+	::= { powerEvents 9 }
+
+trapEndBattEOL NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTime,
+		alarmDescription,
+		alarmSerialNumber 
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when the EOL condition clears.
+		"
+	::= { powerEvents 10 }
+
+trapCurrLimitOverride NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTime,
+		alarmDescription
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when the controller's rectifier current limit 
+		parameter is set and the controller overrides
+		this limit because the load cannot be supported
+		with this limit in place.
+		"
+	::= { powerEvents 11 }
+
+trapStartNotEnoughEDR NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTime,
+		alarmDescription
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when the number of rectifiers is less than 
+		the expected number of rectifiers, 
+		taking redundant rectifiers into account.
+		"
+	::= { powerEvents 12 }
+
+trapEndNotEnoughEDR NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTime,
+		alarmDescription
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when the Not Enough Rectifiers condition clears.
+		"
+	::= { powerEvents 13 }
+
+
+
+trapLearningReq NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTime,
+		alarmDescription, 
+		alarmSerialNumber 
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when a BBU requests Learning Mode calibration
+		"
+	::= { powerEvents 14 }
+
+
+trapLearningSuccess NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTime,
+		alarmDescription,
+		alarmSerialNumber 
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when the BBU that requested Learning Mode calibration
+		has completed the calibration successfully
+		"
+	::= { powerEvents 15 }
+
+
+trapLearningFail NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTime,
+		alarmDescription,
+		alarmSerialNumber 
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when the BBU that requested Learning Mode calibration
+		has failed to complete the calibration successfully
+		"
+	::= { powerEvents 16 }
+
+--
+-- Extended events/traps
+-- These traps are used if configTrapTimeFormat is set 
+-- to a non-zero value
+--
+
+alarmDetailsEx OBJECT IDENTIFIER ::= { powerMIB 44 } 
+
+alarmTimeEx OBJECT-TYPE
+	SYNTAX DateAndTime
+	MAX-ACCESS accessible-for-notify
+	STATUS current
+	DESCRIPTION "
+		Date and time when event occured
+		See SNMPv2-TC for format details
+		"
+	::= { alarmDetailsEx 1 }
+
+alarmDescriptionEx OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS accessible-for-notify
+	STATUS current
+	DESCRIPTION "
+		Free-text description of alarm.
+		This should be the specific reason that the trap is occurring.
+		For example, a rectifier failure could be caused by over-voltage, over-temperature, etc.
+	"
+	::= { alarmDetailsEx 2 }
+
+alarmSerialNumberEx OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS accessible-for-notify
+	STATUS current
+	DESCRIPTION "
+		The serial number of the battery or rectifier associated with the failure."
+	::= { alarmDetailsEx 3 }
+
+alarmDetailedStatusEx OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS accessible-for-notify
+	STATUS current
+	DESCRIPTION "
+		The detailed status of the battery or rectifier associated with the trap.
+		See rectDetailedStatus and battDetailedStatus for the details.
+	"
+	::= { alarmDetailsEx 4 }
+
+
+powerEventsEx OBJECT IDENTIFIER ::= { powerMIB 46 }
+
+trapShelfStatusEx NOTIFICATION-TYPE
+	OBJECTS {
+		statusShelfStatus, 
+		statusBatteryStateOfCharge, 
+		statusACStatus, 
+		statusIncomingACVoltage, 
+		statusShelfOutputVoltage, 
+		statusShelfOutputCurrent,  
+		statusShelfOutputPower,
+		statusBatteryHoldUp, 
+		statusTimeToCharge 
+		}
+	STATUS current
+	DESCRIPTION "
+		Shelf status, sent to the configured trap addresss,
+		on a periodic basis.
+		The fields in this trap are:
+			ShelfStatus, 
+			BatteryStateOfCharge, 
+			ACStatus, 
+			IncomingACVoltage, 
+			ShelfOutputVoltage, 
+			ShelfOutputCurrent,  
+			ShelfOutputPower, 
+			BatteryHoldUp, 
+			TimeToCharge 
+		"
+	::= { powerEventsEx 1 }
+
+trapStartACFailEx NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTimeEx,
+		alarmDescriptionEx
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when any rectifier reports AC Mains failure.  
+		"
+	::= { powerEventsEx 2 }
+
+trapEndACFailEx NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTimeEx,
+		alarmDescriptionEx
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when the AM Mains Failure condition clears.
+		"
+	::= { powerEventsEx 3 }
+
+trapStartRectFailEx NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTimeEx,
+		alarmDescriptionEx,
+		alarmSerialNumberEx,
+		alarmDetailedStatusEx,
+		capacityRectifierPowerCapacity,
+		capacityBatteryPowerCapacity 
+  		}
+	STATUS current
+	DESCRIPTION "
+		Sent when a rectifier reports any failure, 
+		when a rectifier is no longer present, 
+		"
+	::= { powerEventsEx 4 }
+
+trapEndRectFailEx NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTimeEx,
+		alarmDescriptionEx,
+		alarmSerialNumberEx,
+		capacityRectifierPowerCapacity,
+		capacityBatteryPowerCapacity  
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when the RectFail condition ends.
+		"
+	::= { powerEventsEx 5 }
+
+trapStartBattFailEx NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTimeEx,
+		alarmDescriptionEx,
+		alarmSerialNumberEx,
+		alarmDetailedStatusEx,
+		capacityRectifierPowerCapacity,
+		capacityBatteryPowerCapacity  
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when a BBU reports any failure, 
+		when a BBU is no longer present, 
+		or when the number of BBUs is less than 
+		the number of expected BBUs 
+		when the configuration complete flag is set.
+		"
+	::= { powerEventsEx 6 }
+
+trapEndBattFailEx NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTimeEx,
+		alarmDescriptionEx,
+		alarmSerialNumberEx,
+		capacityRectifierPowerCapacity,
+		capacityBatteryPowerCapacity  
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when the BattFail condition ends.
+		"
+	::= { powerEventsEx 7 }
+
+trapStartEPOEx NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTimeEx,
+		alarmDescriptionEx
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when the power-off signal is received.
+		This signal will shutdown all rectifiers and batteries.
+		This will, in turn, shut down the controller.
+		"
+	::= { powerEventsEx 8 }
+
+trapStartBattEOLEx NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTimeEx,
+		alarmDescriptionEx,
+		alarmSerialNumberEx 
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when any battery reports end-of-life.
+		"
+	::= { powerEventsEx 9 }
+
+trapEndBattEOLEx NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTimeEx,
+		alarmDescriptionEx,
+		alarmSerialNumberEx 
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when the EOL condition clears.
+		"
+	::= { powerEventsEx 10 }
+
+trapCurrLimitOverrideEx NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTimeEx,
+		alarmDescriptionEx
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when the controller's rectifier current limit 
+		parameter is set and the controller overrides
+		this limit because the load cannot be supported
+		with this limit in place.
+		"
+	::= { powerEventsEx 11 }
+
+trapStartNotEnoughEDREx NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTimeEx,
+		alarmDescriptionEx
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when the number of rectifiers is less than 
+		the expected number of rectifiers, 
+		taking redundant rectifiers into account.
+		"
+	::= { powerEventsEx 12 }
+
+trapEndNotEnoughEDREx NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTimeEx,
+		alarmDescriptionEx
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when the Not Enough Rectifiers condition clears.
+		"
+	::= { powerEventsEx 13 }
+
+trapLearningReqEx NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTimeEx,
+		alarmDescriptionEx, 
+		alarmSerialNumberEx 
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when a BBU requests Learning Mode calibration
+		"
+	::= { powerEventsEx 14 }
+
+
+trapLearningSuccessEx NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTimeEx,
+		alarmDescriptionEx,
+		alarmSerialNumberEx
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when the BBU that requested Learning Mode calibration
+		has completed the calibration successfully
+		"
+	::= { powerEventsEx 15 }
+
+
+trapLearningFailEx NOTIFICATION-TYPE
+	OBJECTS {
+		alarmTimeEx,
+		alarmDescriptionEx,
+		alarmSerialNumberEx
+		}
+	STATUS current
+	DESCRIPTION "
+		Sent when the BBU that requested Learning Mode calibration
+		has failed to complete the calibration successfully
+		"
+	::= { powerEventsEx 16 }
+
+------------------------------------------------------------
+-- Alarm table { powerMIB 48 }
+------------------------------------------------------------
+
+alarmtableAlarmTable OBJECT-TYPE
+	SYNTAX SEQUENCE OF AlarmtableEntry 
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION "
+		Table holding information about the active and historical alarms."
+	::= { powerMIB 48 }
+
+alarmtableEntry OBJECT-TYPE
+	SYNTAX AlarmtableEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION "
+		An entry (conceptual row) in the alarmtableAlarmTable ."
+	INDEX { alarmtableIndex }
+	::= { alarmtableAlarmTable 1 }
+
+AlarmtableEntry ::= SEQUENCE {
+	alarmtableIndex Counter32,
+	alarmtableTime DisplayString,
+	alarmtableTimeEx DateAndTime,
+	alarmtableDescription DisplayString,
+	alarmtableType Integer32,
+	alarmtableSerialNumber DisplayString,
+	alarmtableDetailedStatus Integer32
+ }
+
+alarmtableIndex OBJECT-TYPE
+	SYNTAX Counter32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		The unique sequence number of this alarm trap."
+	::= { alarmtableEntry 1 }
+
+alarmtableTime OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS accessible-for-notify
+	STATUS current
+	DESCRIPTION "
+		Date and time when event occured (local time).
+		Formatted as DD-MM-YYYY hh:mm:ss
+		"
+	::= { alarmtableEntry 2 }
+
+alarmtableTimeEx OBJECT-TYPE
+	SYNTAX DateAndTime
+	MAX-ACCESS accessible-for-notify
+	STATUS current
+	DESCRIPTION "
+		Date and time when event occured
+		See SNMPv2-TC for format details
+		"
+	::= { alarmtableEntry 3 }
+
+alarmtableDescription OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS accessible-for-notify
+	STATUS current
+	DESCRIPTION "
+		Free-text description of alarm.
+		This should be the specific reason that the trap is occurring.
+		For example, a rectifier failure could be caused by over-voltage, over-temperature, etc.s
+	"
+	::= { alarmtableEntry 4}
+
+alarmtableType OBJECT-TYPE
+	SYNTAX AlarmType
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Alarm type, i.e. an integer specifying the type of alarm.
+	"
+	::= { alarmtableEntry 5}
+
+alarmtableSerialNumber OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS accessible-for-notify
+	STATUS current
+	DESCRIPTION "
+		The serial number of the battery or rectifier associated with the failure."
+	::= { alarmtableEntry 6}
+
+alarmtableDetailedStatus OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS accessible-for-notify
+	STATUS current
+	DESCRIPTION "
+		The detailed status of the battery or rectifier associated with the trap.
+		See rectDetailedStatus and battDetailedStatus for the details.
+	"
+	::= { alarmtableEntry 7}
+
+
+------------------------------------------------------------
+-- Alarm table { powerMIB 49 }
+------------------------------------------------------------
+
+alarmhistoryAlarmTable OBJECT-TYPE
+	SYNTAX SEQUENCE OF AlarmhistoryEntry 
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION "
+		Table holding information about the active and historical alarms."
+	::= { powerMIB 49 }
+
+alarmhistoryEntry OBJECT-TYPE
+	SYNTAX AlarmhistoryEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION "
+		An entry (conceptual row) in the alarmhistoryAlarmTable ."
+	INDEX { alarmhistoryIndex }
+	::= { alarmhistoryAlarmTable 1 }
+
+AlarmhistoryEntry ::= SEQUENCE {
+	alarmhistoryIndex Counter32,
+	alarmhistoryStartTime DisplayString,
+	alarmhistoryStartTimeEx DateAndTime,
+	alarmhistoryEndTime DisplayString,
+	alarmhistoryEndTimeEx DateAndTime,
+	alarmhistoryDescription DisplayString,
+	alarmhistoryType Integer32,
+	alarmhistorySerialNumber DisplayString,
+	alarmhistoryDetailedStatus Integer32
+ }
+
+alarmhistoryIndex OBJECT-TYPE
+	SYNTAX Counter32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		The unique sequence number of this alarm trap."
+	::= { alarmhistoryEntry 1 }
+
+alarmhistoryStartTime OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS accessible-for-notify
+	STATUS current
+	DESCRIPTION "
+		Date and time when event occured (local time).
+		Formatted as DD-MM-YYYY hh:mm:ss
+		"
+	::= { alarmhistoryEntry 2 }
+
+alarmhistoryStartTimeEx OBJECT-TYPE
+	SYNTAX DateAndTime
+	MAX-ACCESS accessible-for-notify
+	STATUS current
+	DESCRIPTION "
+		Date and time when event occured
+		See SNMPv2-TC for format details
+		"
+	::= { alarmhistoryEntry 3 }
+
+alarmhistoryEndTime OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS accessible-for-notify
+	STATUS current
+	DESCRIPTION "
+		Date and time when event occured (local time).
+		Formatted as DD-MM-YYYY hh:mm:ss
+		"
+	::= { alarmhistoryEntry 4 }
+
+alarmhistoryEndTimeEx OBJECT-TYPE
+	SYNTAX DateAndTime
+	MAX-ACCESS accessible-for-notify
+	STATUS current
+	DESCRIPTION "
+		Date and time when event occured
+		See SNMPv2-TC for format details
+		"
+	::= { alarmhistoryEntry 5 }
+
+alarmhistoryDescription OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS accessible-for-notify
+	STATUS current
+	DESCRIPTION "
+		Free-text description of alarm.
+		This should be the specific reason that the trap is occurring.
+		For example, a rectifier failure could be caused by over-voltage, over-temperature, etc.s
+	"
+	::= { alarmhistoryEntry 6}
+
+alarmhistoryType OBJECT-TYPE
+	SYNTAX AlarmType
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION "
+		Alarm type, i.e. an integer specifying the type of alarm.
+	"
+	::= { alarmhistoryEntry 7}
+
+alarmhistorySerialNumber OBJECT-TYPE
+	SYNTAX DisplayString
+	MAX-ACCESS accessible-for-notify
+	STATUS current
+	DESCRIPTION "
+		The serial number of the battery or rectifier associated with the failure."
+	::= { alarmhistoryEntry 8}
+
+alarmhistoryDetailedStatus OBJECT-TYPE
+	SYNTAX Integer32
+	MAX-ACCESS accessible-for-notify
+	STATUS current
+	DESCRIPTION "
+		The detailed status of the battery or rectifier associated with the trap.
+		See rectDetailedStatus and battDetailedStatus for the details.
+	"
+	::= { alarmhistoryEntry 9}
+
+
+--
+-- End of MIB definitions
+--
+
+END
