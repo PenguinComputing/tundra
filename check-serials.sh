@@ -163,15 +163,15 @@ for psu in "$@" ; do
          if [[ "$hwv" == A02 ]]; then
             status="$status -- HW $hwv is current"
          else
-            status="$status -- HW $hwv requires rework"
+            status="$status -- HW $hwv requires REWORK"
             iscurrent=no
          fi
 
 
-         if [[ "$swv" == 9.?? ]]; then
+         if [[ "$swv" == 9.0[67] -o "$swv" == 1.03 ]]; then
             status="$status -- SW $swv is current"
          else
-            status="$status -- SW $swv requires update"
+            status="$status -- SW $swv requires UPDATE"
             iscurrent=no
          fi
 
