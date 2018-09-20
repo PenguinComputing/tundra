@@ -168,7 +168,7 @@ for psu in "$@" ; do
          fi
 
 
-         if [[ "$swv" == 9.0[67] -o "$swv" == 1.03 ]]; then
+         if [[ "$swv" == 9.0[67] || "$swv" == 1.03 ]]; then
             status="$status -- SW $swv is current"
          else
             status="$status -- SW $swv requires UPDATE"
