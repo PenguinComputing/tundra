@@ -266,7 +266,7 @@ sub setreg {
 sub getall () {
    # Dump static configuration
    print  "DHCP: ", getreg("dhcp"), " (0=disabled, 1=enabled)\n";
-   print  "LINK: ", getreg("link"), " (0=auto, 2=10/Half)\n";
+   print  "LINK: ", getreg("link"), " (0=auto, 20=10/Half)\n";
    print  "  IP: ", getreg("ip"), " (only when DHCP=00)\n";
    print  "  GW: ", getreg("gw"), "\n";
    print  "  SM: ", getreg("sm"), "\n";
